@@ -53,6 +53,20 @@ office-staff-task/
 - CORS
 - Vanilla JavaScript (Frontend)
 
+## Deployment
+
+### Deploy to Vercel (Free & Easy)
+
+1. Go to [vercel.com](https://vercel.com)
+2. Sign in with GitHub
+3. Click "Import Project"
+4. Select this repository: `JJ14-ORGHUNT/office-staff-task`
+5. Click "Deploy"
+
+Your app will be live at: `https://office-staff-task.vercel.app` (or your custom domain)
+
+Every time you push to GitHub, Vercel auto-deploys! 🚀
+
 ## License
 
 MIT
