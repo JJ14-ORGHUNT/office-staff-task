@@ -1,0 +1,238 @@
+// Office Staff Daily Work Management - data model
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  SUPERVISOR
+  STAFF
+}
+
+enum TaskType {
+  DAILY
+  WEEKLY
+  MONTHLY
+  ONE_TIME
+  SPECIAL
+}
+
+enum Priority {
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  DONE
+  NOT_DONE
+}
+
+model Location {
+  id        String     @id @default(cuid())
+  name      String
+  createdAt DateTime   @default(now())
+  users     User[]
+  tasks     TaskTemplate[]
+}
+
+model Department {
+  id        String     @id @default(cuid())
+  name      String
+  createdAt DateTime   @default(now())
+  users     User[]
+  tasks     TaskTemplate[]
+}
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  employeeCode  String?  @unique // used by staff to log in
+  pinHash       String?  // staff login (numeric PIN)
+  email         String?  @unique // used by admin/supervisor to log in
+  passwordHash  String?
+  role          Role     @default(STAFF)
+  language      String   @default("en")
+  active        Boolean  @default(true)
+  departmentId  String?
+  department    Department? @relation(fields: [departmentId], references: [id])
+  locationId    String?
+  location      Location?   @relation(fields: [locationId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  assignments   TaskAssignment[]
+  instances     TaskInstance[]
+  createdTasks  TaskTemplate[]  @relation("TaskCreatedBy")
+  auditLogs     AuditLog[]
+  notifications Notification[]
+  extraWork     ExtraWorkLog[]
+  dailySnapshots DailySnapshot[]
+  statusOverridesMade TaskStatusEvent[]
+}
+
+model TaskTemplate {
+  id                    String    @id @default(cuid())
+  title                 String
+  icon                  String    @default("📋")
+  description           String?
+  type                  TaskType  @default(DAILY)
+  priority              Priority  @default(NORMAL)
+  scheduledTimes        String    // comma separated "HH:MM" values, supports multiple times/day
+  recurrenceDays        String?   // comma separated weekday numbers (0=Sun..6=Sat) for WEEKLY
+  recurrenceDayOfMonth  Int?      // for MONTHLY
+  specialDate           DateTime? // for ONE_TIME / SPECIAL
+  reminderMinutesBefore Int       @default(15)
+  durationTrackingEnabled Boolean @default(false) // opt-in START/DONE elapsed-timer flow for staff
+  active                Boolean   @default(true)
+  archived              Boolean   @default(false)
+
+  departmentId  String?
+  department    Department? @relation(fields: [departmentId], references: [id])
+  locationId    String?
+  location      Location?   @relation(fields: [locationId], references: [id])
+
+  createdById   String?
+  createdBy     User?    @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  assignments   TaskAssignment[]
+  instances     TaskInstance[]
+}
+
+model TaskAssignment {
+  id             String       @id @default(cuid())
+  taskTemplateId String
+  taskTemplate   TaskTemplate @relation(fields: [taskTemplateId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+
+  @@unique([taskTemplateId, userId])
+}
+
+// One concrete occurrence of a task, for one user, on one date/time.
+// taskTemplateId is null for a task the staff member added themselves
+// (title/icon are then set directly on the instance instead).
+model TaskInstance {
+  id             String        @id @default(cuid())
+  taskTemplateId String?
+  taskTemplate   TaskTemplate? @relation(fields: [taskTemplateId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title          String?       // set when self-added
+  icon           String?       // set when self-added
+  selfAdded      Boolean       @default(false)
+
+  date           String       // YYYY-MM-DD, local day this instance belongs to (= scheduledDate)
+  scheduledTime  String       // "HH:MM"
+  status         TaskStatus   @default(NOT_STARTED)
+  startedAt      DateTime?
+  completedAt    DateTime?
+  durationSec    Int?         // computed from startedAt/completedAt when DONE
+  reminderCount  Int          @default(0) // reserved for future reminder-nudge feature
+  notDoneReason  String?
+  notDoneNote    String?
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  statusEvents   TaskStatusEvent[]
+
+  @@unique([taskTemplateId, userId, date, scheduledTime])
+  @@index([userId, date])
+}
+
+// Audit trail of every status transition a TaskInstance goes through
+// (creation, START, DONE, NOT DONE + reason) — backs the per-task timeline.
+model TaskStatusEvent {
+  id             String       @id @default(cuid())
+  taskInstanceId String
+  taskInstance   TaskInstance @relation(fields: [taskInstanceId], references: [id], onDelete: Cascade)
+  fromStatus     String?
+  toStatus       String
+  at             DateTime     @default(now())
+  note           String?
+
+  // Null = the task's own owner made this change (the normal staff-driven
+  // path). Set = an admin/supervisor overrode someone else's task (e.g. from
+  // the admin Kanban board), so the audit trail can tell the two apart.
+  changedByUserId String?
+  changedByUser    User?   @relation(fields: [changedByUserId], references: [id])
+
+  @@index([taskInstanceId])
+}
+
+// Per-employee, per-day rollup of that day's TaskInstance rows — computed
+// lazily on first read and cached here. "Today" is always recomputed on read
+// (its TaskInstance rows can still change during the day); any past date is
+// computed once and served from this cache thereafter, since past
+// TaskInstance rows never change after creation (see TaskInstance comment).
+model DailySnapshot {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date             String   // YYYY-MM-DD
+  totalTasks       Int
+  completed        Int
+  inProgress       Int
+  notDone          Int
+  overdueCount     Int
+  totalDurationSec Int
+  completionPct    Int
+  computedAt       DateTime @default(now())
+
+  @@unique([userId, date])
+  @@index([date])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String   // e.g. TASK_CREATED, TASK_STATUS_CHANGED, EMPLOYEE_CREATED
+  entityType String
+  entityId   String
+  detail     String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+}
+
+// Ad-hoc work a staff member reports outside their assigned checklist,
+// as typed text and/or a short voice recording.
+model ExtraWorkLog {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date        String   // YYYY-MM-DD
+  description String?
+  audioFile   String?  // filename under the private uploads folder, not a public URL
+  durationSec Int?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, date])
+}
+
+model Notification {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title          String
+  body           String
+  read           Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+
+  @@index([userId, read])
+}
