@@ -2,154 +2,214 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Checklist">
   <title>Office Daily Checklist</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231f6feb'/%3E%3Cpath d='M9 16l5 5 9-10' stroke='white' stroke-width='3.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon-192.png">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <header class="topbar">
-    <strong>Office Daily Checklist</strong>
-    <span id="who" class="muted"></span>
-    <button id="logoutBtn" class="btn small ghost hidden">Log out</button>
+  <header class="topbar hidden" id="topbar">
+    <div class="brand"><div class="logo">✓</div><span class="t">Daily Checklist</span></div>
+    <div class="spacer"></div>
+    <div class="lang hidden" id="topLang"></div>
+    <div class="who" id="who"></div>
+    <button class="icon-btn" id="logoutBtn" title="Log out" aria-label="Log out">⏻</button>
   </header>
 
-  <main id="app">
-    <!-- Login -->
-    <section id="loginView" class="view hidden">
-      <form id="loginForm" class="card login">
-        <h1>Sign in</h1>
-        <label>Employee ID
-          <input name="emp_code" autocomplete="username" autocapitalize="characters" required placeholder="e.g. EMP001">
-        </label>
-        <label>PIN / Password
-          <input name="pin" type="password" autocomplete="current-password" required>
-        </label>
-        <p id="loginError" class="error"></p>
-        <button class="btn primary block">Log in</button>
-        <p class="muted small">Staff and admin use the same login.</p>
-      </form>
-    </section>
-
-    <!-- Staff -->
-    <section id="staffView" class="view hidden">
-      <div class="card">
-        <h1 id="welcome"></h1>
-        <div class="meta">
-          <div><span class="muted">Date</span><b id="sDate"></b></div>
-          <div><span class="muted">Clock in</span><b id="sIn"></b></div>
-          <div><span class="muted">Clock out</span><b id="sOut">—</b></div>
+  <main>
+    <!-- ============ LOGIN ============ -->
+    <section id="loginView" class="hidden">
+      <div class="login-box">
+        <div class="login-head">
+          <div class="logo">✓</div>
+          <h1 data-t="appName">Daily Checklist</h1>
+          <p data-t="loginSub">Log in to start your day</p>
         </div>
-        <div class="progress"><div id="sBar"></div></div>
-        <p id="sProgress" class="muted"></p>
+        <div class="lang" id="loginLang"></div>
+
+        <div class="card">
+          <div id="remembered" class="remembered hidden">
+            <div class="avatar" id="remAvatar"></div>
+            <div><div class="small muted" data-t="empId">Employee ID</div><b id="remCode"></b></div>
+            <button class="link" id="notYou" data-t="notYou">Not you?</button>
+          </div>
+          <label id="idLabel" class="idbox"><span data-t="empId">Employee ID</span>
+            <input id="empCode" autocomplete="username" autocapitalize="characters" spellcheck="false" placeholder="EMP001">
+          </label>
+
+          <div id="pinPad">
+            <div class="pin-label" data-t="enterPin">Enter your PIN</div>
+            <div class="dots" id="dots"></div>
+            <div class="keypad" id="keypad"></div>
+          </div>
+          <div id="pwBox" class="pwbox hidden">
+            <label><span data-t="password">Password</span>
+              <input id="pw" type="password" autocomplete="current-password">
+            </label>
+            <button class="btn primary block xl" id="pwLogin" data-t="login">Log in</button>
+          </div>
+          <p class="error" id="loginError" role="alert"></p>
+        </div>
+        <div class="login-foot">
+          <button class="link" id="togglePw" data-t="usePassword">Admin? Use password</button>
+        </div>
       </div>
-      <div id="sDone" class="card notice hidden"></div>
-      <ul id="sList" class="checklist"></ul>
-      <button id="clockOutBtn" class="btn danger block big">Clock Out</button>
     </section>
 
-    <!-- Admin -->
-    <section id="adminView" class="view hidden">
+    <!-- ============ STAFF ============ -->
+    <section id="staffView" class="hidden">
+      <div class="hero" id="hero">
+        <div class="row">
+          <div style="flex:1;min-width:0">
+            <h1 id="greet"></h1>
+            <div class="date" id="todayDate"></div>
+            <div class="clock" id="liveClock"></div>
+          </div>
+          <div class="ring hidden" id="ring">
+            <svg viewBox="0 0 100 100"><circle class="bg" cx="50" cy="50" r="42" fill="none" stroke-width="10"/><circle class="fg" id="ringFg" cx="50" cy="50" r="42" fill="none" stroke-width="10" stroke-dasharray="263.9" stroke-dashoffset="263.9"/></svg>
+            <div><span><b id="ringNum">0/0</b><br><small data-t="done">done</small></span></div>
+          </div>
+        </div>
+        <div class="chips" id="heroChips"></div>
+      </div>
+
+      <div class="card clockin-card hidden" id="clockInCard">
+        <p data-t="clockInHint">Tap the button below when you arrive at office</p>
+        <button class="btn-clockin" id="clockInBtn"><span class="play">▶</span><span data-t="clockIn">Clock In</span></button>
+      </div>
+
+      <div id="staffBanner"></div>
+      <div id="taskArea"></div>
+    </section>
+
+    <!-- ============ ADMIN ============ -->
+    <section id="adminView" class="hidden">
       <nav class="tabs">
-        <button data-tab="dash" class="active">Dashboard</button>
-        <button data-tab="staff">Staff</button>
-        <button data-tab="tasks">Tasks</button>
+        <button data-tab="dash" class="active">📊 Dashboard</button>
+        <button data-tab="staff">👥 Staff</button>
+        <button data-tab="tasks">📋 Tasks</button>
       </nav>
 
       <div id="tab-dash" class="tab">
-        <div class="row">
-          <label class="inline">Date <input type="date" id="repDate"></label>
-          <button id="repToday" class="btn small">Today</button>
-          <button id="repRefresh" class="btn small">Refresh</button>
+        <div class="toolbar">
+          <div class="datenav">
+            <button class="icon-btn" id="prevDay" aria-label="Previous day">‹</button>
+            <input type="date" id="repDate">
+            <button class="icon-btn" id="nextDay" aria-label="Next day">›</button>
+          </div>
+          <button class="btn small soft" id="repToday">Today</button>
+          <div class="grow"></div>
+          <span class="small muted" id="lastSync"></span>
+          <button class="btn small" id="repRefresh">↻ Refresh</button>
+          <button class="btn small" id="exportCsv">⬇ Export CSV</button>
         </div>
         <div class="stats">
-          <div class="stat"><span>Total staff</span><b id="stTotal">0</b></div>
-          <div class="stat"><span>Present</span><b id="stPresent">0</b></div>
-          <div class="stat"><span>Working now</span><b id="stWorking">0</b></div>
-          <div class="stat"><span>Tasks completed</span><b id="stPct">0%</b><small id="stTasks" class="muted"></small></div>
+          <div class="stat"><div class="si blue">📈</div><div><span>Tasks completed</span><b id="stPct">0%</b><div class="small muted" id="stTasks"></div></div></div>
+          <div class="stat"><div class="si gray">👥</div><div><span>Total staff</span><b id="stTotal">0</b></div></div>
+          <div class="stat"><div class="si green">✅</div><div><span>Present</span><b id="stPresent">0</b></div></div>
+          <div class="stat"><div class="si amber">🟢</div><div><span>Working now</span><b id="stWorking">0</b></div></div>
+          <div class="stat"><div class="si purple">🏁</div><div><span>Clocked out</span><b id="stOut">0</b></div></div>
         </div>
-        <div id="repList"></div>
+        <div class="emps" id="emps"></div>
       </div>
 
       <div id="tab-staff" class="tab hidden">
-        <div class="row"><button id="addUserBtn" class="btn primary">+ Add staff</button></div>
+        <div class="toolbar"><h2 class="grow">Staff accounts</h2><button class="btn primary" id="addUserBtn">+ Add staff</button></div>
         <div class="table-wrap"><table>
-          <thead><tr><th>Employee ID</th><th>Name</th><th>Role</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Name</th><th>Employee ID</th><th class="hide-sm">Role</th><th>Status</th><th></th></tr></thead>
           <tbody id="userRows"></tbody>
         </table></div>
       </div>
 
       <div id="tab-tasks" class="tab hidden">
-        <div class="row"><button id="addTaskBtn" class="btn primary">+ Add task</button></div>
+        <div class="toolbar"><h2 class="grow">Daily checklist tasks</h2><button class="btn primary" id="addTaskBtn">+ Add task</button></div>
         <div class="table-wrap"><table>
-          <thead><tr><th>Order</th><th>Task</th><th>Assigned to</th><th></th></tr></thead>
+          <thead><tr><th style="width:90px">Order</th><th>Task</th><th class="hide-sm">Assigned to</th><th></th></tr></thead>
           <tbody id="taskRows"></tbody>
         </table></div>
-        <p class="muted small">Changes apply to checklists from the next time staff open the app. Tasks already worked on today stay in today's record.</p>
+        <p class="small muted">New or changed tasks appear on staff phones the next time they open or refresh the app. Past days' reports are not affected.</p>
       </div>
     </section>
   </main>
 
-  <!-- Dialogs -->
-  <dialog id="userDlg">
-    <form method="dialog" id="userForm">
-      <h2 id="userDlgTitle">Staff</h2>
-      <label>Employee ID <input name="emp_code" required></label>
-      <label>Full name <input name="name" required></label>
-      <label>Role
-        <select name="role"><option value="staff">Staff</option><option value="admin">Admin</option></select>
-      </label>
-      <label>PIN / Password <input name="pin" type="password" autocomplete="new-password" placeholder="min 4 characters"></label>
-      <label class="check"><input type="checkbox" name="active" checked> Active</label>
-      <p class="error"></p>
-      <div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" value="save">Save</button></div>
-    </form>
-  </dialog>
+  <div class="bottom-bar hidden" id="bottomBar"><div class="inner">
+    <button class="btn danger block xl" id="clockOutBtn">⏹ <span data-t="clockOut">Clock Out</span></button>
+  </div></div>
 
-  <dialog id="taskDlg">
-    <form method="dialog" id="taskForm">
-      <h2 id="taskDlgTitle">Task</h2>
-      <label>Task name <input name="name" required></label>
-      <label>Display order <input name="sort_order" type="number" step="1"></label>
-      <label class="check"><input type="checkbox" name="assign_all" checked> Assign to all staff</label>
-      <fieldset id="taskStaff" class="hidden"><legend>Assign to</legend><div></div></fieldset>
-      <p class="error"></p>
-      <div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" value="save">Save</button></div>
-    </form>
-  </dialog>
+  <!-- ============ DIALOGS ============ -->
+  <dialog id="noteDlg" class="sheet"><form>
+    <h2 data-t="addNote">Add a note</h2>
+    <p class="sub" id="noteTask"></p>
+    <div class="quick" id="quickNotes"></div>
+    <textarea id="noteText" rows="3" maxlength="500"></textarea>
+    <div class="actions"><button type="button" class="btn" data-close data-t="cancel">Cancel</button><button class="btn primary" data-t="save">Save</button></div>
+  </form></dialog>
 
-  <dialog id="attDlg">
-    <form method="dialog" id="attForm">
-      <h2>Correct attendance</h2>
-      <p id="attWho" class="muted"></p>
-      <label>Clock in <input name="clock_in" type="datetime-local"></label>
-      <label>Clock out <input name="clock_out" type="datetime-local"></label>
-      <p class="muted small">Clear clock out to let the staff member continue working. Clear both to mark absent.</p>
-      <p class="error"></p>
-      <div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" value="save">Save</button></div>
-    </form>
-  </dialog>
+  <dialog id="outDlg" class="sheet"><form>
+    <h2 data-t="clockOutQ">Finish your day?</h2>
+    <div id="outBody"></div>
+    <div class="actions"><button type="button" class="btn" data-close data-t="goBack">Go back</button><button class="btn danger" data-t="yesClockOut">Yes, Clock Out</button></div>
+  </form></dialog>
 
-  <dialog id="adhocDlg">
-    <form method="dialog" id="adhocForm">
-      <h2>Add ad-hoc task</h2>
-      <p id="adhocWho" class="muted"></p>
-      <label>Task <input name="task_name" required placeholder="e.g. Arrange chairs for 3pm client meeting"></label>
-      <p class="error"></p>
-      <div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" value="save">Add</button></div>
-    </form>
-  </dialog>
+  <dialog id="empDlg"><div>
+    <div class="dlg-head">
+      <div class="avatar lg" id="edAvatar"></div>
+      <div class="nm"><h2 id="edName"></h2><div class="small muted" id="edSub"></div></div>
+      <button class="icon-btn" data-close aria-label="Close">✕</button>
+    </div>
+    <div class="summary-grid" id="edSummary"></div>
+    <div class="itemlist" id="edItems"></div>
+    <div class="actions">
+      <button class="btn" id="edAtt">🕘 Correct attendance</button>
+      <button class="btn primary" id="edAdhoc">+ Ad-hoc task</button>
+    </div>
+  </div></dialog>
 
-  <dialog id="confirmDlg">
-    <form method="dialog">
-      <h2>Clock out now?</h2>
-      <div id="confirmBody"></div>
-      <p class="muted small">You won't be able to update tasks after clocking out.</p>
-      <div class="actions"><button class="btn" value="no">Cancel</button><button class="btn danger" value="yes">Yes, clock out</button></div>
-    </form>
-  </dialog>
+  <dialog id="userDlg"><form>
+    <h2 id="userDlgTitle">Staff</h2><p class="sub">Staff log in with Employee ID + PIN.</p>
+    <label>Full name <input name="name" required></label>
+    <label>Employee ID <input name="emp_code" required autocapitalize="characters"></label>
+    <label>Role <select name="role"><option value="staff">Staff (office team)</option><option value="admin">Admin</option></select></label>
+    <label><span id="pinLabel">PIN</span> <input name="pin" type="text" inputmode="numeric" autocomplete="off"></label>
+    <label class="check"><input type="checkbox" name="active" checked> Active (can log in)</label>
+    <p class="error"></p>
+    <div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary">Save</button></div>
+  </form></dialog>
 
-  <div id="toast" class="toast hidden"></div>
+  <dialog id="taskDlg"><form>
+    <h2 id="taskDlgTitle">Task</h2><p class="sub">Tip: start with an action word, e.g. "Clean meeting room".</p>
+    <label>Task name <input name="name" required maxlength="120"></label>
+    <label>Display order <input name="sort_order" type="number" step="1"></label>
+    <label class="check"><input type="checkbox" name="assign_all" checked> Assign to all staff</label>
+    <fieldset id="taskStaff" class="hidden"><legend>Assign to</legend><div></div></fieldset>
+    <p class="error"></p>
+    <div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary">Save</button></div>
+  </form></dialog>
+
+  <dialog id="attDlg"><form>
+    <h2>Correct attendance</h2><p class="sub" id="attWho"></p>
+    <label>Clock in <input name="clock_in" type="datetime-local"></label>
+    <label>Clock out <input name="clock_out" type="datetime-local"></label>
+    <p class="small muted">Clear "Clock out" to let them continue working. Clear both to mark as not present.</p>
+    <p class="error"></p>
+    <div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary">Save</button></div>
+  </form></dialog>
+
+  <dialog id="adhocDlg"><form>
+    <h2>Add ad-hoc task</h2><p class="sub" id="adhocWho"></p>
+    <label>Task <input name="task_name" required maxlength="120" placeholder="e.g. Arrange chairs for 3 PM client meeting"></label>
+    <p class="error"></p>
+    <div class="actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary">Add task</button></div>
+  </form></dialog>
+
+  <div id="toast" class="toast hidden" role="status"></div>
+  <script src="/i18n.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

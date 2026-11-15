@@ -125,11 +125,6 @@ app.post('/api/login', async (req, res) => {
   if (!u || !checkPin(pin, u.pin_hash)) { noteFail(code); return bad(res, 'Invalid Employee ID or PIN', 401); }
   if (!u.active) return bad(res, 'This account is deactivated. Contact admin.', 403);
   fails.delete(code);
-  if (u.role === 'staff') {
-    // Record clock-in on the first login of the day.
-    await db.run(`INSERT INTO attendance (user_id, work_date, clock_in) VALUES (?, ?, ?)
-                  ON CONFLICT (user_id, work_date) DO NOTHING`, [u.id, today(), now()]);
-  }
   setSession(req, res, makeToken(u.id), SESSION_HOURS * 3600);
   res.json({ user: publicUser(u) });
 });
@@ -160,10 +155,8 @@ const summarize = items => {
 
 app.get('/api/my/today', requireUser, requireStaff, async (req, res) => {
   const date = today(), uid = req.user.id;
-  // Logged in yesterday and session still valid? Make sure today's attendance exists.
-  await db.run(`INSERT INTO attendance (user_id, work_date, clock_in) VALUES (?, ?, ?)
-                ON CONFLICT (user_id, work_date) DO NOTHING`, [uid, date, now()]);
-  const att = await db.get('SELECT clock_in, clock_out FROM attendance WHERE user_id = ? AND work_date = ?', [uid, date]);
+  const att = (await db.get('SELECT clock_in, clock_out FROM attendance WHERE user_id = ? AND work_date = ?', [uid, date]))
+    || { clock_in: null, clock_out: null };
   if (!att.clock_out) await ensureItems(uid, date);
   const items = await itemsFor(uid, date);
   res.json({ user: publicUser(req.user), date, attendance: att, items, summary: summarize(items) });
@@ -173,8 +166,9 @@ app.patch('/api/my/items/:id', requireUser, requireStaff, async (req, res) => {
   const date = today(), uid = req.user.id;
   const item = await db.get('SELECT * FROM daily_items WHERE id = ? AND user_id = ? AND work_date = ?', [+req.params.id, uid, date]);
   if (!item) return bad(res, 'Task not found', 404);
-  const att = await db.get('SELECT clock_out FROM attendance WHERE user_id = ? AND work_date = ?', [uid, date]);
-  if (att?.clock_out) return bad(res, 'You have already clocked out for today', 409);
+  const att = await db.get('SELECT clock_in, clock_out FROM attendance WHERE user_id = ? AND work_date = ?', [uid, date]);
+  if (!att?.clock_in) return bad(res, 'Please clock in first', 409);
+  if (att.clock_out) return bad(res, 'You have already clocked out for today', 409);
   const status = req.body?.status ?? item.status;
   if (!STATUSES.includes(status)) return bad(res, 'Invalid status');
   const remarks = typeof req.body?.remarks === 'string' ? req.body.remarks.trim().slice(0, 500) : item.remarks;
@@ -183,8 +177,18 @@ app.patch('/api/my/items/:id', requireUser, requireStaff, async (req, res) => {
   res.json({ ...item, status, remarks, updated_at: ts });
 });
 
+app.post('/api/my/clockin', requireUser, requireStaff, async (req, res) => {
+  const date = today(), uid = req.user.id;
+  const r = await db.run(`INSERT INTO attendance (user_id, work_date, clock_in) VALUES (?, ?, ?)
+                          ON CONFLICT (user_id, work_date) DO NOTHING`, [uid, date, now()]);
+  if (!r.changes) return bad(res, 'You have already clocked in today', 409);
+  await ensureItems(uid, date);
+  res.json({ attendance: await db.get('SELECT clock_in, clock_out FROM attendance WHERE user_id = ? AND work_date = ?', [uid, date]) });
+});
+
 app.post('/api/my/clockout', requireUser, requireStaff, async (req, res) => {
   const date = today(), uid = req.user.id;
+  if (!(await db.get('SELECT 1 AS x FROM attendance WHERE user_id = ? AND work_date = ?', [uid, date]))) return bad(res, 'Please clock in first', 409);
   const r = await db.run('UPDATE attendance SET clock_out = ? WHERE user_id = ? AND work_date = ? AND clock_out IS NULL', [now(), uid, date]);
   if (!r.changes) return bad(res, 'You have already clocked out today', 409);
   const att = await db.get('SELECT clock_in, clock_out FROM attendance WHERE user_id = ? AND work_date = ?', [uid, date]);

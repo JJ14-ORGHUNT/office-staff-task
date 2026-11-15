@@ -8,17 +8,20 @@ A small web app where office support staff **log in → update their daily check
 
 ## Features
 
-**Staff** (mobile-friendly)
-- Log in with Employee ID + PIN. The first login of the day records the **clock-in time**.
-- Today's checklist: each task has a Pending / In Progress / Completed selector, optional remarks and a "last updated" time.
-- Progress bar and counts.
-- **Clock Out** shows a confirmation with the day's summary and records the clock-out time. Clocking out a second time is blocked, and the checklist locks after clock-out.
+**Staff** (built for phones and for staff who aren't comfortable with technology)
+- Big number keypad for the PIN. The phone remembers the Employee ID, so next time staff only enter the PIN.
+- Screens in **English, हिंदी or తెలుగు** (one tap to switch; the choice is remembered).
+- A big green **Clock In** button records the arrival time. Tasks stay locked until the staff member clocks in.
+- Each task shows an icon and large **▶ Start** / **✓ Done** buttons. **📝 Note** has one-tap quick notes ("Out of stock", "Need help", …). Done tasks move to a "Done" list with an **Undo** button.
+- A progress ring, live clock and "working for 3h 12m" timer.
+- **Clock Out** opens a confirmation showing the day's summary and warns if tasks are still not done. The day then shows a summary card and locks. Clocking in or out twice is blocked.
+- Can be installed to the home screen like an app (Chrome menu → *Add to Home screen*).
 
 **Admin**
-- **Dashboard** for any date (today or past days): total staff, present, working now, overall completion %, and one row per employee with clock-in/out, status and progress. Expand a row to see each task's status and remarks.
+- **Dashboard** for today or any past day (‹ › arrows to move between days; refreshes itself every minute): total staff, present, working now, overall completion %, and one row per employee with clock-in/out, status and progress. Tap an employee to see each task's status and notes. **Export CSV** downloads the day's report for Excel.
 - **Corrections:** edit an employee's clock-in/clock-out (or clear clock-out so they can continue), change a task's status, and add or remove ad-hoc tasks for one person on one day.
 - **Staff:** add, edit (name, ID, role, PIN reset), and deactivate/reactivate accounts. Deactivated users are logged out immediately.
-- **Tasks:** add, edit or delete checklist tasks, set the display order, and assign each task to all staff or to selected people.
+- **Tasks:** add, edit or delete checklist tasks, reorder them with ↑ ↓, and assign each task to all staff or to selected people.
 
 ## Sample accounts (created automatically on first run)
 
@@ -84,6 +87,6 @@ vercel.json      Vercel deployment config
 
 ## How it works
 
-- A staff member's checklist for the day is created the first time they open the app that day, from the tasks assigned to them. Tasks added or assigned later in the day show up the next time they open or refresh the app.
+- A staff member's checklist for the day is created the first time they open the app that day (clock-in time is recorded only when they tap **Clock In**), from the tasks assigned to them. Tasks added or assigned later in the day show up the next time they open or refresh the app.
 - Each day's task names are stored with the record, so editing or deleting tasks never changes past reports.
 - Staff who never log in show as "Not logged in" for that day.

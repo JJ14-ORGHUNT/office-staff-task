@@ -31,12 +31,20 @@ test('staff: login -> update tasks -> clock out', async () => {
   assert.equal(login.status, 200);
   assert.equal(login.data.user.name, 'Ravi Kumar');
 
-  const t = await c('/my/today');
+  let t = await c('/my/today');
   assert.equal(t.status, 200);
-  assert.ok(t.data.attendance.clock_in, 'clock-in recorded on login');
-  assert.equal(t.data.attendance.clock_out, null);
-  assert.equal(t.data.items.length, 9);
+  assert.equal(t.data.attendance.clock_in, null, 'login alone does not clock in');
+  assert.equal(t.data.items.length, 9, 'checklist visible before clock-in');
   assert.ok(t.data.items.every(i => i.status === 'Pending'));
+  assert.equal((await c('/my/items/' + t.data.items[0].id, 'PATCH', { status: 'Completed' })).status, 409, 'no updates before clock-in');
+  assert.equal((await c('/my/clockout', 'POST')).status, 409, 'no clock-out before clock-in');
+
+  const ci = await c('/my/clockin', 'POST');
+  assert.equal(ci.status, 200);
+  assert.ok(ci.data.attendance.clock_in);
+  assert.equal((await c('/my/clockin', 'POST')).status, 409, 'duplicate clock-in blocked');
+  t = await c('/my/today');
+  assert.equal(t.data.attendance.clock_in, ci.data.attendance.clock_in);
 
   const [a, b] = t.data.items;
   const u1 = await c('/my/items/' + a.id, 'PATCH', { status: 'Completed', remarks: 'Done by 10am' });
@@ -71,6 +79,7 @@ test('staff: login -> update tasks -> clock out', async () => {
 test('admin: dashboard, staff, tasks, corrections', async () => {
   const s2 = client();
   await s2('/login', 'POST', { emp_code: 'EMP002', pin: '2222' });
+  await s2('/my/clockin', 'POST');
 
   const ad = client();
   assert.equal((await ad('/login', 'POST', { emp_code: 'ADMIN', pin: 'admin123' })).status, 200);
@@ -97,6 +106,7 @@ test('admin: dashboard, staff, tasks, corrections', async () => {
   assert.equal((await ad('/admin/users', 'POST', { emp_code: 'EMP004', name: 'Dup', pin: '4444' })).status, 409);
   const n = client();
   assert.equal((await n('/login', 'POST', { emp_code: 'EMP004', pin: '4444' })).status, 200);
+  assert.equal((await n('/my/today')).status, 200);
   assert.equal((await ad('/admin/users/' + nu.data.id, 'PUT', { active: false })).status, 200);
   assert.equal((await n('/my/today')).status, 401, 'deactivated session rejected');
   assert.equal((await n('/login', 'POST', { emp_code: 'EMP004', pin: '4444' })).status, 403);
