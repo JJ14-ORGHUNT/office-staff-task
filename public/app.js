@@ -55,6 +55,19 @@ const ERR_KEYS = [
 ];
 const friendly = msg => { for (const [re, k] of ERR_KEYS) if (re.test(msg)) return t(k); return msg; };
 
+// Auto-update: if the server is running a newer version than this page, reload
+// (when no sheet is open), so nobody is ever stuck on an old screen.
+const PAGE_VERSION = (document.querySelector('script[src*="app.js"]')?.src.match(/v=([\w]+)/) || [])[1] || null;
+let pendingVersion = null;
+function checkVersion(v) {
+  if (!v || v === PAGE_VERSION) return;
+  try { if (sessionStorage.getItem('reloadedFor') === v) return; } catch { return; } // never loop
+  pendingVersion = v;
+  if (document.querySelector('dialog[open]')) return; // wait until the sheet is closed
+  try { sessionStorage.setItem('reloadedFor', v); } catch {}
+  location.reload();
+}
+setInterval(() => { if (pendingVersion) checkVersion(pendingVersion); }, 5000);
 async function api(path, opts = {}) {
   let res;
   try {
@@ -65,6 +78,7 @@ async function api(path, opts = {}) {
       credentials: 'same-origin', cache: 'no-store',
     });
   } catch { throw new Error(t('noNet')); }
+  checkVersion(res.headers.get('X-App-Version'));
   const data = await res.json().catch(() => ({}));
   if (res.status === 401 && path !== '/login') { goLogin(); throw new Error(t('pleaseLogin')); }
   if (!res.ok) { const e = new Error(friendly(data.error || 'Something went wrong')); e.status = res.status; throw e; }
@@ -229,7 +243,7 @@ function renderStaff() {
         <div><span>${esc(t('outTime'))}</span><b>${fmtTime(a.clock_out)}</b></div>
         <div><span>${esc(t('worked'))}</span><b>${fmtDur(new Date(a.clock_out) - new Date(a.clock_in))}</b></div>
         <div><span>${esc(t('tasksDone'))}</span><b>${s.Completed}/${s.total}</b></div>
-      </div><div class="muted">${esc(t('seeYou'))}</div></div>`;
+      </div><div class="muted">${esc(t('seeYou'))}</div><div class="small muted" style="margin-top:.4rem">${esc(t('mistakeOut'))}</div></div>`;
   else if (s.total && s.Completed === s.total) banner = `<div class="banner ok"><span class="big">🎉</span><span>${esc(t('allDone'))}</span></div>`;
   $('#staffBanner').innerHTML = banner;
 

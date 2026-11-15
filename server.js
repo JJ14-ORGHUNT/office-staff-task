@@ -1,6 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
 const db = require('./db');
 
@@ -97,8 +98,24 @@ const init = () => (ready ||= db.migrate().then(seed).catch(e => { ready = null;
 const app = express();
 app.set('trust proxy', 1);
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
-app.use('/api', async (req, res, next) => { await init(); next(); });
+// App version = hash of the frontend files. Pages that were opened before a deploy
+// see a different version on their next API call and reload themselves.
+const PUBLIC = path.join(__dirname, 'public');
+const VERSION = crypto.createHash('sha1')
+  .update(['index.html', 'app.js', 'i18n.js', 'style.css'].map(f => fs.readFileSync(path.join(PUBLIC, f))).join('\n'))
+  .digest('hex').slice(0, 10);
+const INDEX = fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8')
+  .replace(/(href|src)="\/(app\.js|i18n\.js|style\.css)"/g, `$1="/$2?v=${VERSION}"`);
+const sendIndex = (req, res) => {
+  res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.type('html').send(INDEX);
+};
+app.get(['/', '/index.html'], sendIndex);
+app.use(express.static(PUBLIC, { index: false }));
+app.use('/api', async (req, res, next) => {
+  res.set({ 'X-App-Version': VERSION, 'Cache-Control': 'no-store' });
+  await init(); next();
+});
 
 async function loadUser(req) {
   const p = readToken(getCookie(req, 'sid'));
