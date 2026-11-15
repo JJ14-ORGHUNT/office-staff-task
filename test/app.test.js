@@ -142,6 +142,16 @@ test('admin: dashboard, staff, tasks, corrections', async () => {
   assert.equal(r.data.totals.present, 0);
   assert.equal(r.data.totals.tasks.total, 0);
 
+  // Staff PINs must be digits; bad JSON is a 400; attendance needs a real user.
+  assert.equal((await ad('/admin/users', 'POST', { emp_code: 'EMP009', name: 'Letters', pin: 'abcd' })).status, 400);
+  assert.equal((await fetch(base + '/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{bad' })).status, 400);
+  assert.equal((await ad('/admin/attendance', 'PUT', { user_id: 9999, date, clock_in: new Date().toISOString() })).status, 404);
+  // Forgotten clock-out on a past day is not counted as working.
+  assert.equal((await ad('/admin/attendance', 'PUT', { user_id: suresh.id, date: '2020-01-02', clock_in: '2020-01-02T04:00:00Z', clock_out: null })).status, 200);
+  r = await ad('/admin/report?date=2020-01-02');
+  assert.equal(r.data.totals.working, 0);
+  assert.equal(r.data.totals.no_clock_out, 1);
+
   // Admin can't lock themselves out.
   const me = users.find(u => u.emp_code === 'ADMIN');
   assert.equal((await ad('/admin/users/' + me.id, 'PUT', { active: false })).status, 400);

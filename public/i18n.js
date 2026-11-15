@@ -2,6 +2,7 @@
 // UI text for the staff screens. Task names stay exactly as the admin typed them.
 window.I18N = {
   en: {
+    pleaseLogin: 'Please log in again', taskGone: 'This task was removed by admin', serverErr: 'Something went wrong. Please try again.',
     _name: 'English', _locale: 'en-IN',
     appName: 'Daily Checklist', loginSub: 'Log in to start your day',
     empId: 'Employee ID', notYou: 'Not you?', enterPin: 'Enter your PIN', password: 'Password', login: 'Log in',
@@ -26,6 +27,7 @@ window.I18N = {
     alreadyIn: 'You have already clocked in today', alreadyOut: 'You have already clocked out today',
   },
   hi: {
+    pleaseLogin: 'कृपया फिर से लॉग इन करें', taskGone: 'यह काम एडमिन ने हटा दिया है', serverErr: 'कुछ गलत हो गया। फिर से कोशिश करें।',
     _name: 'हिंदी', _locale: 'hi-IN',
     appName: 'दैनिक चेकलिस्ट', loginSub: 'अपना दिन शुरू करने के लिए लॉग इन करें',
     empId: 'कर्मचारी आईडी', notYou: 'आप नहीं हैं?', enterPin: 'अपना पिन डालें', password: 'पासवर्ड', login: 'लॉग इन',
@@ -50,6 +52,7 @@ window.I18N = {
     alreadyIn: 'आप आज पहले ही क्लॉक इन कर चुके हैं', alreadyOut: 'आप आज पहले ही क्लॉक आउट कर चुके हैं',
   },
   te: {
+    pleaseLogin: 'దయచేసి మళ్ళీ లాగిన్ అవ్వండి', taskGone: 'ఈ పనిని అడ్మిన్ తొలగించారు', serverErr: 'ఏదో పొరపాటు జరిగింది. మళ్ళీ ప్రయత్నించండి.',
     _name: 'తెలుగు', _locale: 'te-IN',
     appName: 'రోజువారీ చెక్‌లిస్ట్', loginSub: 'మీ రోజు ప్రారంభించడానికి లాగిన్ అవ్వండి',
     empId: 'ఉద్యోగి ఐడి', notYou: 'మీరు కాదా?', enterPin: 'మీ పిన్ నమోదు చేయండి', password: 'పాస్‌వర్డ్', login: 'లాగిన్',

@@ -120,11 +120,12 @@ app.get('/api/health', async (req, res) => res.json({ ok: true, db: db.kind }));
 app.post('/api/login', async (req, res) => {
   const code = str(req.body?.emp_code).toUpperCase(), pin = str(req.body?.pin);
   if (!code || !pin) return bad(res, 'Enter Employee ID and PIN');
-  if (locked(code)) return bad(res, 'Too many attempts. Try again in 5 minutes.', 429);
+  const key = req.ip + '|' + code;
+  if (locked(key)) return bad(res, 'Too many attempts. Try again in 5 minutes.', 429);
   const u = await db.get('SELECT * FROM users WHERE emp_code = ?', [code]);
-  if (!u || !checkPin(pin, u.pin_hash)) { noteFail(code); return bad(res, 'Invalid Employee ID or PIN', 401); }
+  if (!u || !checkPin(pin, u.pin_hash)) { noteFail(key); return bad(res, 'Invalid Employee ID or PIN', 401); }
   if (!u.active) return bad(res, 'This account is deactivated. Contact admin.', 403);
-  fails.delete(code);
+  fails.delete(key);
   setSession(req, res, makeToken(u.id), SESSION_HOURS * 3600);
   res.json({ user: publicUser(u) });
 });
@@ -145,7 +146,10 @@ async function ensureItems(userId, date) {
   }
 }
 const itemsFor = (userId, date) =>
-  db.all('SELECT id, task_id, task_name, status, remarks, updated_at FROM daily_items WHERE user_id = ? AND work_date = ? ORDER BY id', [userId, date]);
+  db.all(`SELECT d.id, d.task_id, d.task_name, d.status, d.remarks, d.updated_at FROM daily_items d
+          LEFT JOIN tasks t ON t.id = d.task_id
+          WHERE d.user_id = ? AND d.work_date = ?
+          ORDER BY CASE WHEN t.sort_order IS NULL THEN 1 ELSE 0 END, t.sort_order, d.id`, [userId, date]);
 const summarize = items => {
   const s = { total: items.length, Pending: 0, 'In Progress': 0, Completed: 0 };
   items.forEach(i => s[i.status]++);
@@ -217,7 +221,8 @@ admin.get('/report', async (req, res) => {
     totals: {
       total_staff: users.filter(u => u.active).length,
       present: staff.filter(s => s.attendance?.clock_in).length,
-      working: staff.filter(s => s.attendance?.clock_in && !s.attendance.clock_out).length,
+      working: date === today() ? staff.filter(s => s.attendance?.clock_in && !s.attendance.clock_out).length : 0,
+      no_clock_out: date < today() ? staff.filter(s => s.attendance?.clock_in && !s.attendance.clock_out).length : 0,
       clocked_out: staff.filter(s => s.attendance?.clock_out).length,
       tasks: all,
     },
@@ -234,6 +239,7 @@ admin.post('/users', async (req, res) => {
   const role = req.body?.role === 'admin' ? 'admin' : 'staff';
   if (!code || !name) return bad(res, 'Employee ID and name are required');
   if (pin.length < 4) return bad(res, 'PIN must be at least 4 characters');
+  if (role === 'staff' && !/^[0-9]{4,8}$/.test(pin)) return bad(res, 'Staff PIN must be 4 to 8 digits (numbers only)');
   const r = await db.run(`INSERT INTO users (emp_code, name, pin_hash, role, active, created_at) VALUES (?, ?, ?, ?, 1, ?)
                           ON CONFLICT (emp_code) DO NOTHING RETURNING id`, [code, name, hashPin(pin), role, now()]);
   if (!r.rows.length) return bad(res, 'Employee ID already exists', 409);
@@ -249,6 +255,7 @@ admin.put('/users/:id', async (req, res) => {
   const pin = str(req.body?.pin);
   if (u.id === req.user.id && (!active || role !== 'admin')) return bad(res, 'You cannot deactivate or demote your own account');
   if (pin && pin.length < 4) return bad(res, 'PIN must be at least 4 characters');
+  if (pin && role === 'staff' && !/^[0-9]{4,8}$/.test(pin)) return bad(res, 'Staff PIN must be 4 to 8 digits (numbers only)');
   if (code !== u.emp_code && (await db.get('SELECT id FROM users WHERE emp_code = ?', [code]))) return bad(res, 'Employee ID already exists', 409);
   await db.run('UPDATE users SET emp_code = ?, name = ?, role = ?, active = ?, pin_hash = ? WHERE id = ?',
     [code, name, role, active, pin ? hashPin(pin) : u.pin_hash, u.id]);
@@ -327,6 +334,7 @@ admin.delete('/items/:id', async (req, res) => {
 admin.put('/attendance', async (req, res) => {
   const uid = +req.body?.user_id, date = req.body?.date;
   if (!uid || !isDate(date)) return bad(res, 'user_id and date are required');
+  if (!(await db.get('SELECT id FROM users WHERE id = ?', [uid]))) return bad(res, 'User not found', 404);
   const ci = isoOrNull(req.body.clock_in), co = isoOrNull(req.body.clock_out);
   if (ci === undefined || co === undefined) return bad(res, 'Invalid time');
   if (!ci && co) return bad(res, 'Clock-in is required when clock-out is set');
@@ -344,6 +352,7 @@ admin.put('/attendance', async (req, res) => {
 app.use('/api/admin', admin);
 app.use('/api', (req, res) => bad(res, 'Not found', 404));
 app.use((err, req, res, next) => {
+  if (err.type === 'entity.parse.failed' || (err.status >= 400 && err.status < 500)) return bad(res, 'Bad request', err.status || 400);
   console.error(err);
   res.status(500).json({ error: 'Server error' });
 });

@@ -51,6 +51,7 @@ function toast(msg, kind) {
 const ERR_KEYS = [
   [/Invalid Employee ID or PIN/, 'wrongLogin'], [/Too many attempts/, 'tooMany'], [/deactivated/, 'deactivated'],
   [/already clocked in/, 'alreadyIn'], [/already clocked out/, 'alreadyOut'], [/clock in first/, 'clockInFirst'],
+  [/Please log in/, 'pleaseLogin'], [/Task not found/, 'taskGone'], [/Server error|Something went wrong/, 'serverErr'],
 ];
 const friendly = msg => { for (const [re, k] of ERR_KEYS) if (re.test(msg)) return t(k); return msg; };
 
@@ -65,8 +66,8 @@ async function api(path, opts = {}) {
     });
   } catch { throw new Error(t('noNet')); }
   const data = await res.json().catch(() => ({}));
-  if (res.status === 401 && path !== '/login') { goLogin(); throw new Error(data.error || 'Please log in'); }
-  if (!res.ok) throw new Error(friendly(data.error || 'Something went wrong'));
+  if (res.status === 401 && path !== '/login') { goLogin(); throw new Error(t('pleaseLogin')); }
+  if (!res.ok) { const e = new Error(friendly(data.error || 'Something went wrong')); e.status = res.status; throw e; }
   return data;
 }
 
@@ -81,7 +82,7 @@ function showView(v) {
   $('#who').innerHTML = me && v !== 'login'
     ? `<div class="avatar">${esc(initials(me.name))}</div><div><b>${esc(me.name)}</b><span>${esc(me.emp_code)}</span></div>` : '';
 }
-function goLogin() { me = null; staff = null; showView('login'); resetLogin(); }
+function goLogin() { $$('dialog[open]').forEach(d => d.close()); me = null; staff = null; showView('login'); resetLogin(); }
 function route(user) {
   me = user;
   if (user.role === 'admin') { showView('admin'); loadReport(); }
@@ -264,18 +265,29 @@ function renderStaff() {
       <ul class="tasks">${done.map(doneCard).join('')}</ul>` : '');
 }
 
+let saving = 0;
+const findItem = id => staff?.items.find(i => i.id === id);
 async function setItem(id, patch, okMsg) {
-  const it = staff.items.find(i => i.id === id);
-  const before = { ...it };
-  Object.assign(it, patch, { updated_at: new Date().toISOString() });
+  const it = findItem(id);
+  if (!it) return false;
+  const before = Object.fromEntries(Object.keys(patch).map(k => [k, it[k]]));
+  Object.assign(it, patch);
   renderStaff();
+  saving++;
   try {
-    Object.assign(it, await api('/my/items/' + id, { method: 'PATCH', body: patch }));
+    const upd = await api('/my/items/' + id, { method: 'PATCH', body: patch });
+    const cur = findItem(id); if (cur) Object.assign(cur, upd);
     renderStaff();
     if (okMsg) toast(okMsg, 'ok');
+    return true;
   } catch (ex) {
-    Object.assign(it, before); renderStaff(); toast(ex.message, 'err');
-  }
+    const cur = findItem(id);
+    // only roll back fields that still hold the value we set
+    if (cur) for (const k in patch) if (cur[k] === patch[k]) cur[k] = before[k];
+    renderStaff(); toast(ex.message, 'err');
+    if (ex.status === 404 || ex.status === 409) loadStaff(true);
+    return false;
+  } finally { saving--; }
 }
 $('#taskArea').addEventListener('click', e => {
   const b = e.target.closest('[data-act]');
@@ -306,7 +318,7 @@ $('#quickNotes').addEventListener('click', e => {
 });
 bindForm($('#noteDlg'), async () => {
   const v = $('#noteText').value.trim();
-  if (v !== (noteItem.remarks || '')) await setItem(noteItem.id, { remarks: v }, t('saved'));
+  if (v !== (noteItem.remarks || '') && !(await setItem(noteItem.id, { remarks: v }, t('saved')))) throw new Error(t('noNet'));
 });
 
 // clock in / out
@@ -337,12 +349,12 @@ bindForm($('#outDlg'), async () => {
 // keep things fresh: clock every 20s, data every 60s, and when the app comes back to the foreground
 setInterval(() => { if (staff && !$('#staffView').classList.contains('hidden')) tickClock(); }, 20000);
 setInterval(() => {
-  if (document.hidden || $('#staffView').classList.contains('hidden') || document.querySelector('dialog[open]')) return;
+  if (document.hidden || saving || $('#staffView').classList.contains('hidden') || document.querySelector('dialog[open]')) return;
   loadStaff(true);
 }, 60000);
 document.addEventListener('visibilitychange', () => {
   if (document.hidden || !me) return;
-  if (me.role === 'staff' && !document.querySelector('dialog[open]')) loadStaff(true);
+  if (me.role === 'staff' && !saving && !document.querySelector('dialog[open]')) loadStaff(true);
   if (me.role === 'admin' && !$('#tab-dash').classList.contains('hidden')) loadReport(true);
 });
 
@@ -366,7 +378,7 @@ async function loadReport(silent) {
     if (!d) $('#repDate').value = report.date;
     renderReport();
     $('#lastSync').textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    if (openEmp != null && $('#empDlg').open) renderEmpDlg();
+    if (openEmp != null && $('#empDlg').open && !$('#edItems').contains(document.activeElement)) renderEmpDlg();
   } catch (ex) { if (!silent) toast(ex.message, 'err'); }
 }
 const shiftDate = n => {
@@ -384,11 +396,12 @@ setInterval(() => {
   if (report && report.date === report.today && !document.querySelector('dialog[open]:not(#empDlg)')) loadReport(true);
 }, 60000);
 
-const empState = s => !s.attendance?.clock_in ? 'absent' : s.attendance.clock_out ? 'out' : 'working';
+const empState = s => !s.attendance?.clock_in ? 'absent' : s.attendance.clock_out ? 'out' : report.date < report.today ? 'noout' : 'working';
 const statePill = st => ({
   working: '<span class="pill doing">🟢 Working</span>', out: '<span class="pill done">🏁 Clocked out</span>',
-  absent: '<span class="pill absent">Not clocked in</span>' })[st];
-const worked = a => (a?.clock_in ? fmtDurEn((a.clock_out ? new Date(a.clock_out) : new Date()) - new Date(a.clock_in)) : '—');
+  absent: '<span class="pill absent">Not clocked in</span>', noout: '<span class="pill absent">⚠️ No clock-out</span>' })[st];
+const worked = a => (!a?.clock_in ? '—' : a.clock_out ? fmtDurEn(new Date(a.clock_out) - new Date(a.clock_in))
+  : report && report.date < report.today ? '—' : fmtDurEn(Date.now() - new Date(a.clock_in)));
 const fmtDurEn = ms => { const mins = Math.max(0, Math.floor(ms / 60000)); return (mins >= 60 ? Math.floor(mins / 60) + 'h ' : '') + (mins % 60) + 'm'; };
 const tEn = iso => (iso ? new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '—');
 
@@ -400,7 +413,7 @@ function renderReport() {
   $('#stOut').textContent = tt.clocked_out;
   $('#stPct').textContent = tt.tasks.percent + '%';
   $('#stTasks').textContent = `${tt.tasks.Completed} of ${tt.tasks.total} tasks`;
-  const rank = { working: 0, out: 1, absent: 2 };
+  const rank = { working: 0, noout: 1, out: 2, absent: 3 };
   const list = [...report.staff].sort((a, b) => rank[empState(a)] - rank[empState(b)] || a.user.name.localeCompare(b.user.name));
   $('#emps').innerHTML = list.map(s => {
     const st = empState(s), sm = s.summary;
@@ -473,7 +486,7 @@ bindForm($('#adhocDlg'), async f => {
 
 $('#exportCsv').addEventListener('click', () => {
   if (!report) return;
-  const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const q = v => { let x = String(v ?? ''); if (/^[=+\-@\t\r]/.test(x)) x = "'" + x; return '"' + x.replace(/"/g, '""') + '"'; };
   const rows = [['Date', 'Employee ID', 'Name', 'Clock in', 'Clock out', 'Time worked', 'Task', 'Status', 'Remarks', 'Last updated']];
   for (const s of report.staff) {
     const a = s.attendance, base = [report.date, s.user.emp_code, s.user.name, tEn(a?.clock_in), tEn(a?.clock_out), worked(a)];
@@ -489,9 +502,9 @@ $('#exportCsv').addEventListener('click', () => {
 async function loadUsers() {
   try { users = (await api('/admin/users')).users; } catch (ex) { return toast(ex.message, 'err'); }
   $('#userRows').innerHTML = users.map(u => `<tr>
-    <td><div class="who"><div class="avatar">${esc(initials(u.name))}</div><b>${esc(u.name)}</b></div></td>
-    <td>${esc(u.emp_code)}</td><td class="hide-sm">${u.role === 'admin' ? '<span class="pill blue">Admin</span>' : 'Staff'}</td>
-    <td>${u.active ? '<span class="pill done">Active</span>' : '<span class="pill absent">Inactive</span>'}</td>
+    <td><div class="who"><div class="avatar">${esc(initials(u.name))}</div><div><b>${esc(u.name)}</b><span>${esc(u.emp_code)}</span>${u.active ? '<span class="pill done show-sm">Active</span>' : '<span class="pill absent show-sm">Inactive</span>'}</div></div></td>
+    <td class="hide-sm">${esc(u.emp_code)}</td><td class="hide-sm">${u.role === 'admin' ? '<span class="pill blue">Admin</span>' : 'Staff'}</td>
+    <td class="hide-sm">${u.active ? '<span class="pill done">Active</span>' : '<span class="pill absent">Inactive</span>'}</td>
     <td><div class="acts"><button class="btn small" data-edit="${u.id}">Edit</button>
       ${u.id === me.id ? '' : `<button class="btn small" data-toggle="${u.id}">${u.active ? 'Deactivate' : 'Activate'}</button>`}</div></td></tr>`).join('');
 }

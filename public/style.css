@@ -242,3 +242,12 @@ td select { padding: .4rem .5rem; width: auto; min-width: 130px; }
   .irow .ctl { grid-column: 1 / -1; justify-content: flex-end; }
   th.hide-sm, td.hide-sm { display: none; }
 }
+
+/* long names / notes never push the layout sideways */
+.task .tname, .task .note, .emp .nm, .emp .nm b, .irow .nm, .irow .rm, .dlg-head .nm, #edName { overflow-wrap: anywhere; word-break: break-word; min-width: 0; }
+.emp .head b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.irow > div { min-width: 0; }
+#userRows .who b, #taskRows b { max-width: none; white-space: normal; overflow-wrap: break-word; }
+.show-sm, #userRows .who span.show-sm { display: none; }
+@media (max-width: 560px) { .show-sm, #userRows .who span.show-sm { display: table; margin-top: .25rem; } #userRows td:last-child .acts { flex-direction: column; align-items: stretch; } }
+#userRows .who span { display: block; }
