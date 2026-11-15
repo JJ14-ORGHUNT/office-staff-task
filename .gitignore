@@ -8,3 +8,7 @@ yarn-debug.log*
 yarn-error.log*
 data.json
 data/
+
+.vercel
+.env*
+!.env.example

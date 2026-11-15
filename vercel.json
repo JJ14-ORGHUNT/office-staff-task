@@ -4,8 +4,21 @@
     {
       "src": "server.js",
       "use": "@vercel/node",
-      "config": { "includeFiles": ["public/**", "db.js"] }
+      "config": {
+        "includeFiles": [
+          "public/**",
+          "db.js"
+        ]
+      }
     }
   ],
-  "routes": [{ "src": "/(.*)", "dest": "server.js" }]
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "server.js"
+    }
+  ],
+  "regions": [
+    "hnd1"
+  ]
 }
